@@ -1,2 +1,5 @@
 {"Index":1,"Term":0,"Command":{"Op":"PUT","Key":"foo","Value":"bar"}}
 {"Index":2,"Term":0,"Command":{"Op":"PUT","Key":"foo","Value":"bar"}}
+{"Index":3,"Term":0,"Command":{"Op":"PUT","Key":"foo","Value":"bar"}}
+{"Index":4,"Term":0,"Command":{"Op":"PUT","Key":"name","Value":"alice"}}
+{"Index":5,"Term":0,"Command":{"Op":"PUT","Key":"city","Value":"london"}}
