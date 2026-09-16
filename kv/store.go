@@ -27,7 +27,7 @@ func Open(walPath string) (*Store, error) {
 		nextIndex: 1,
 	}
 
-	err = w.Replay(func(entry LogEntryAlias) error {
+	err = w.Replay(func(entry raft.LogEntry) error {
 		s.apply(entry)
 		if entry.Index >= s.nextIndex {
 			s.nextIndex = entry.Index + 1
@@ -40,8 +40,6 @@ func Open(walPath string) (*Store, error) {
 
 	return s, nil
 }
-
-type LogEntryAlias = raft.LogEntry
 
 func (s *Store) apply(entry raft.LogEntry) {
 	s.mu.Lock()
