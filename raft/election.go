@@ -7,8 +7,8 @@ import (
 
 const (
 	heartbeatInterval  = 50 * time.Millisecond
-	electionTimeoutMin = 150 * time.Millisecond
-	electionTimeoutMax = 300 * time.Millisecond
+	electionTimeoutMin = 600 * time.Millisecond
+	electionTimeoutMax = 1000 * time.Millisecond
 )
 
 func randomElectionTimeout() time.Duration {
