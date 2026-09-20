@@ -1,11 +1,17 @@
 package raft
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
 
 type State int
+
+var (
+	ErrNotLeader = errors.New("not the leader")
+	ErrNoQuorum  = errors.New("failed to reach quorum")
+)
 
 const (
 	Follower State = iota
@@ -110,6 +116,15 @@ func (n *Node) HandleAppendEntries(args *AppendEntriesArgs, reply *AppendEntries
 	n.votedFor = 0
 	n.lastHeartbeat = time.Now()
 
+	if len(args.Entries) > 0 {
+		n.log = args.Entries
+		if n.wal != nil {
+			for _, entry := range args.Entries {
+				n.wal.Append(entry)
+			}
+		}
+	}
+
 	reply.Term = n.currentTerm
 	reply.Success = true
 	return nil
@@ -121,4 +136,95 @@ func (n *Node) lastLogInfo() (index uint64, term uint64) {
 	}
 	last := n.log[len(n.log)-1]
 	return last.Index, last.Term
+}
+
+func (n *Node) Propose(command Command) (uint64, error) {
+	n.mu.Lock()
+
+	if n.state != Leader {
+		n.mu.Unlock()
+		return 0, ErrNotLeader
+	}
+
+	index := uint64(len(n.log)) + 1
+	entry := LogEntry{
+		Index:   index,
+		Term:    n.currentTerm,
+		Command: command,
+	}
+
+	if n.wal != nil {
+		if err := n.wal.Append(entry); err != nil {
+			n.mu.Unlock()
+			return 0, err
+		}
+	}
+	n.log = append(n.log, entry)
+	term := n.currentTerm
+	peers := n.peers
+	n.mu.Unlock()
+
+	acked := 1
+	ackCh := make(chan bool, len(peers))
+
+	for _, peer := range peers {
+		if peer.ID == n.id {
+			continue
+		}
+		go func(p NodeConfig) {
+			ok := n.replicateTo(p, term)
+			ackCh <- ok
+		}(peer)
+	}
+
+	needed := len(peers)/2 + 1
+	for i := 0; i < len(peers)-1; i++ {
+		if <-ackCh {
+			acked++
+		}
+		if acked >= needed {
+			return index, nil
+		}
+	}
+
+	return index, ErrNoQuorum
+}
+
+func (n *Node) replicateTo(peer NodeConfig, term uint64) bool {
+	n.mu.Lock()
+	if n.state != Leader || n.currentTerm != term {
+		n.mu.Unlock()
+		return false
+	}
+	entries := make([]LogEntry, len(n.log))
+	copy(entries, n.log)
+	prevLogIndex, prevLogTerm := uint64(0), uint64(0)
+	if len(entries) > 1 {
+		prev := entries[len(entries)-2]
+		prevLogIndex, prevLogTerm = prev.Index, prev.Term
+	}
+	n.mu.Unlock()
+
+	args := &AppendEntriesArgs{
+		Term:         term,
+		LeaderID:     n.id,
+		PrevLogIndex: prevLogIndex,
+		PrevLogTerm:  prevLogTerm,
+		Entries:      entries,
+	}
+
+	reply, err := callAppendEntries(peer.Address, args)
+	if err != nil {
+		return false
+	}
+
+	n.mu.Lock()
+	if reply.Term > n.currentTerm {
+		n.currentTerm = reply.Term
+		n.state = Follower
+		n.votedFor = 0
+	}
+	n.mu.Unlock()
+
+	return reply.Success
 }
