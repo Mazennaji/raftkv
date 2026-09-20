@@ -48,6 +48,8 @@ type Node struct {
 	log []LogEntry
 
 	nextIndex map[uint64]uint64
+
+	onApply func(LogEntry)
 }
 
 func NewNode(id uint64, peers []NodeConfig, wal *WAL) *Node {
@@ -64,6 +66,12 @@ func NewNode(id uint64, peers []NodeConfig, wal *WAL) *Node {
 		wal:         wal,
 		nextIndex:   nextIndex,
 	}
+}
+
+func (n *Node) OnApply(fn func(LogEntry)) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.onApply = fn
 }
 
 func (n *Node) State() State {
@@ -145,12 +153,18 @@ func (n *Node) HandleAppendEntries(args *AppendEntriesArgs, reply *AppendEntries
 			if existing.Term != entry.Term {
 				n.log = n.log[:entry.Index-1]
 				n.log = append(n.log, entry)
+				if n.onApply != nil {
+					n.onApply(entry)
+				}
 			}
 			continue
 		}
 		n.log = append(n.log, entry)
 		if n.wal != nil {
 			n.wal.Append(entry)
+		}
+		if n.onApply != nil {
+			n.onApply(entry)
 		}
 	}
 
@@ -212,6 +226,11 @@ func (n *Node) Propose(command Command) (uint64, error) {
 			acked++
 		}
 		if acked >= needed {
+			n.mu.Lock()
+			if n.onApply != nil {
+				n.onApply(entry)
+			}
+			n.mu.Unlock()
 			return index, nil
 		}
 	}
