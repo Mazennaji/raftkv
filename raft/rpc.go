@@ -54,6 +54,17 @@ type RPCHandler struct {
 	node *Node
 }
 
+type SetNetworkArgs struct {
+	Enabled bool
+}
+
+type SetNetworkReply struct{}
+
+func (h *RPCHandler) SetNetworkEnabled(args *SetNetworkArgs, reply *SetNetworkReply) error {
+	h.node.SetNetworkEnabled(args.Enabled)
+	return nil
+}
+
 func (h *RPCHandler) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
 	return h.node.HandleRequestVote(args, reply)
 }
