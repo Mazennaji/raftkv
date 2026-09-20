@@ -58,3 +58,31 @@ func Serve(n *Node, address string) error {
 	go server.Accept(listener)
 	return nil
 }
+
+func callRequestVote(address string, args *RequestVoteArgs) (*RequestVoteReply, error) {
+	client, err := rpc.Dial("tcp", address)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	reply := &RequestVoteReply{}
+	if err := client.Call("Raft.RequestVote", args, reply); err != nil {
+		return nil, err
+	}
+	return reply, nil
+}
+
+func callAppendEntries(address string, args *AppendEntriesArgs) (*AppendEntriesReply, error) {
+	client, err := rpc.Dial("tcp", address)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	reply := &AppendEntriesReply{}
+	if err := client.Call("Raft.AppendEntries", args, reply); err != nil {
+		return nil, err
+	}
+	return reply, nil
+}
