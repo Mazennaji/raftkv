@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"fmt"
 	"net/rpc"
 )
 
@@ -26,14 +27,17 @@ func (c *Client) Put(key, value string) error {
 	for _, addr := range order {
 		conn, err := rpc.Dial("tcp", addr)
 		if err != nil {
+			fmt.Printf("[client] dial %s failed: %v\n", addr, err)
 			continue
 		}
 		err = conn.Call("Raft.ClientPut", args, reply)
 		conn.Close()
 		if err != nil {
+			fmt.Printf("[client] call to %s failed: %v\n", addr, err)
 			continue
 		}
 		if reply.NotLeader {
+			fmt.Printf("[client] %s says it is not leader\n", addr)
 			continue
 		}
 		c.leader = addr
