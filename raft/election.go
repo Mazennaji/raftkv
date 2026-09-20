@@ -91,6 +91,7 @@ func (n *Node) startElection() {
 
 	if n.state == Candidate && n.currentTerm == term && votes >= votesNeeded {
 		n.state = Leader
+		n.resetNextIndex()
 		go n.leaderLoop()
 	}
 }
