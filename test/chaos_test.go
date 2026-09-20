@@ -21,7 +21,8 @@ func startCluster(t *testing.T, n int) *testCluster {
 
 	for i := 1; i <= n; i++ {
 		walPath := fmt.Sprintf("%s/node%d.wal", dir, i)
-		cmd := exec.Command("../raftkv.exe", fmt.Sprintf("%d", i), walPath)
+		cmd := exec.Command("./raftkv.exe", fmt.Sprintf("%d", i), walPath)
+		cmd.Dir = ".."
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Start(); err != nil {
@@ -41,7 +42,8 @@ func (tc *testCluster) killNode(i int) {
 
 func (tc *testCluster) restartNode(i int) {
 	walPath := fmt.Sprintf("%s/node%d.wal", tc.dir, i)
-	cmd := exec.Command("../raftkv.exe", fmt.Sprintf("%d", i), walPath)
+	cmd := exec.Command("./raftkv.exe", fmt.Sprintf("%d", i), walPath)
+	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Start()

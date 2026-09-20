@@ -1,1 +1,6 @@
 {"Index":1,"Term":19,"Command":{"Op":"PUT","Key":"hello","Value":"world"}}
+{"Index":1,"Term":18,"Command":{"Op":"PUT","Key":"key1","Value":"value1"}}
+{"Index":2,"Term":18,"Command":{"Op":"PUT","Key":"key2","Value":"value2"}}
+{"Index":3,"Term":18,"Command":{"Op":"PUT","Key":"durable","Value":"data"}}
+{"Index":4,"Term":18,"Command":{"Op":"PUT","Key":"seed","Value":"value"}}
+{"Index":5,"Term":18,"Command":{"Op":"PUT","Key":"should_fail","Value":"value"}}
