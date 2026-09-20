@@ -31,6 +31,25 @@ type AppendEntriesReply struct {
 	Success bool
 }
 
+type ClientPutArgs struct {
+	Key   string
+	Value string
+}
+
+type ClientPutReply struct {
+	NotLeader bool
+}
+
+type ClientGetArgs struct {
+	Key string
+}
+
+type ClientGetReply struct {
+	Value     string
+	Found     bool
+	NotLeader bool
+}
+
 type RPCHandler struct {
 	node *Node
 }
@@ -41,6 +60,30 @@ func (h *RPCHandler) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply)
 
 func (h *RPCHandler) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) error {
 	return h.node.HandleAppendEntries(args, reply)
+}
+
+func (h *RPCHandler) ClientPut(args *ClientPutArgs, reply *ClientPutReply) error {
+	if h.node.State() != Leader {
+		reply.NotLeader = true
+		return nil
+	}
+	_, err := h.node.Propose(Command{Op: "PUT", Key: args.Key, Value: args.Value})
+	if err == ErrNotLeader {
+		reply.NotLeader = true
+		return nil
+	}
+	return err
+}
+
+func (h *RPCHandler) ClientGet(args *ClientGetArgs, reply *ClientGetReply) error {
+	if h.node.State() != Leader {
+		reply.NotLeader = true
+		return nil
+	}
+	value, found := h.node.reader.Get(args.Key)
+	reply.Value = value
+	reply.Found = found
+	return nil
 }
 
 func Serve(n *Node, address string) error {
