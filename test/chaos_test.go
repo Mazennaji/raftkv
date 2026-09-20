@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Mazennaji/raftkv/client"
+	"github.com/Mazennaji/raftkv/raft"
 )
 
 type testCluster struct {
@@ -64,6 +65,15 @@ func addresses() []string {
 	return []string{"127.0.0.1:8001", "127.0.0.1:8002", "127.0.0.1:8003"}
 }
 
+func setNetworkEnabled(address string, enabled bool) error {
+	conn, err := rpc.Dial("tcp", address)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return conn.Call("Raft.SetNetworkEnabled", &raft.SetNetworkArgs{Enabled: enabled}, &raft.SetNetworkReply{})
+}
+
 func TestKillLeaderMidOperation(t *testing.T) {
 	tc := startCluster(t, 3)
 	defer tc.shutdown()
@@ -74,8 +84,8 @@ func TestKillLeaderMidOperation(t *testing.T) {
 		t.Fatalf("initial put failed: %v", err)
 	}
 
-	leaderAddr := findLeaderIndex(t, c)
-	tc.killNode(leaderAddr)
+	leaderIndex := findLeaderIndex(t, c)
+	tc.killNode(leaderIndex)
 
 	time.Sleep(2 * time.Second)
 
@@ -132,19 +142,6 @@ func TestMinorityCannotServeWrites(t *testing.T) {
 	}
 }
 
-func findLeaderIndex(t *testing.T, c *client.Client) int {
-	return 1
-}
-
-func setNetworkEnabled(address string, enabled bool) error {
-	client, err := rpc.Dial("tcp", address)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	return client.Call("Raft.SetNetworkEnabled", &raft.SetNetworkArgs{Enabled: enabled}, &raft.SetNetworkReply{})
-}
-
 func TestNetworkPartitionIsolatesMinority(t *testing.T) {
 	tc := startCluster(t, 3)
 	defer tc.shutdown()
@@ -175,4 +172,8 @@ func TestNetworkPartitionIsolatesMinority(t *testing.T) {
 	if err != nil || !found || val != "value2" {
 		t.Fatalf("write made during partition was lost: val=%s found=%v err=%v", val, found, err)
 	}
+}
+
+func findLeaderIndex(t *testing.T, c *client.Client) int {
+	return 1
 }
