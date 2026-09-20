@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-type State int
-
 var (
 	ErrNotLeader = errors.New("not the leader")
 	ErrNoQuorum  = errors.New("failed to reach quorum")
 )
+
+type State int
 
 const (
 	Follower State = iota
@@ -46,15 +46,23 @@ type Node struct {
 
 	wal *WAL
 	log []LogEntry
+
+	nextIndex map[uint64]uint64
 }
 
 func NewNode(id uint64, peers []NodeConfig, wal *WAL) *Node {
+	nextIndex := make(map[uint64]uint64)
+	for _, p := range peers {
+		nextIndex[p.ID] = 1
+	}
 	return &Node{
 		id:          id,
 		peers:       peers,
 		state:       Follower,
 		currentTerm: 0,
 		votedFor:    0,
+		wal:         wal,
+		nextIndex:   nextIndex,
 	}
 }
 
@@ -116,12 +124,33 @@ func (n *Node) HandleAppendEntries(args *AppendEntriesArgs, reply *AppendEntries
 	n.votedFor = 0
 	n.lastHeartbeat = time.Now()
 
-	if len(args.Entries) > 0 {
-		n.log = args.Entries
-		if n.wal != nil {
-			for _, entry := range args.Entries {
-				n.wal.Append(entry)
+	if args.PrevLogIndex > 0 {
+		if args.PrevLogIndex > uint64(len(n.log)) {
+			reply.Term = n.currentTerm
+			reply.Success = false
+			return nil
+		}
+		existing := n.log[args.PrevLogIndex-1]
+		if existing.Term != args.PrevLogTerm {
+			n.log = n.log[:args.PrevLogIndex-1]
+			reply.Term = n.currentTerm
+			reply.Success = false
+			return nil
+		}
+	}
+
+	for _, entry := range args.Entries {
+		if entry.Index <= uint64(len(n.log)) {
+			existing := n.log[entry.Index-1]
+			if existing.Term != entry.Term {
+				n.log = n.log[:entry.Index-1]
+				n.log = append(n.log, entry)
 			}
+			continue
+		}
+		n.log = append(n.log, entry)
+		if n.wal != nil {
+			n.wal.Append(entry)
 		}
 	}
 
@@ -196,35 +225,88 @@ func (n *Node) replicateTo(peer NodeConfig, term uint64) bool {
 		n.mu.Unlock()
 		return false
 	}
-	entries := make([]LogEntry, len(n.log))
-	copy(entries, n.log)
-	prevLogIndex, prevLogTerm := uint64(0), uint64(0)
-	if len(entries) > 1 {
-		prev := entries[len(entries)-2]
-		prevLogIndex, prevLogTerm = prev.Index, prev.Term
+	nextIdx := n.nextIndex[peer.ID]
+	if nextIdx == 0 {
+		nextIdx = uint64(len(n.log)) + 1
 	}
 	n.mu.Unlock()
 
-	args := &AppendEntriesArgs{
-		Term:         term,
-		LeaderID:     n.id,
-		PrevLogIndex: prevLogIndex,
-		PrevLogTerm:  prevLogTerm,
-		Entries:      entries,
-	}
+	for {
+		n.mu.Lock()
+		if n.state != Leader || n.currentTerm != term {
+			n.mu.Unlock()
+			return false
+		}
 
-	reply, err := callAppendEntries(peer.Address, args)
-	if err != nil {
-		return false
-	}
+		entries := make([]LogEntry, 0)
+		if nextIdx <= uint64(len(n.log)) {
+			entries = append(entries, n.log[nextIdx-1:]...)
+		}
 
+		prevLogIndex, prevLogTerm := uint64(0), uint64(0)
+		if nextIdx > 1 {
+			prev := n.log[nextIdx-2]
+			prevLogIndex, prevLogTerm = prev.Index, prev.Term
+		}
+		n.mu.Unlock()
+
+		args := &AppendEntriesArgs{
+			Term:         term,
+			LeaderID:     n.id,
+			PrevLogIndex: prevLogIndex,
+			PrevLogTerm:  prevLogTerm,
+			Entries:      entries,
+		}
+
+		reply, err := callAppendEntries(peer.Address, args)
+		if err != nil {
+			return false
+		}
+
+		n.mu.Lock()
+		if reply.Term > n.currentTerm {
+			n.currentTerm = reply.Term
+			n.state = Follower
+			n.votedFor = 0
+			n.mu.Unlock()
+			return false
+		}
+		n.mu.Unlock()
+
+		if reply.Success {
+			n.setNextIndex(peer.ID, nextIdx+uint64(len(entries)))
+			return true
+		}
+
+		if nextIdx > 1 {
+			nextIdx--
+		} else {
+			return false
+		}
+	}
+}
+
+func (n *Node) nextIndexFor(peerID uint64) uint64 {
 	n.mu.Lock()
-	if reply.Term > n.currentTerm {
-		n.currentTerm = reply.Term
-		n.state = Follower
-		n.votedFor = 0
+	defer n.mu.Unlock()
+	idx, ok := n.nextIndex[peerID]
+	if !ok {
+		return uint64(len(n.log)) + 1
 	}
-	n.mu.Unlock()
+	return idx
+}
 
-	return reply.Success
+func (n *Node) setNextIndex(peerID uint64, idx uint64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.nextIndex[peerID] = idx
+}
+
+func (n *Node) resetNextIndex() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	next := uint64(len(n.log)) + 1
+	for _, p := range n.peers {
+		n.nextIndex[p.ID] = next
+	}
 }
