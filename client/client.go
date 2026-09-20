@@ -35,7 +35,6 @@ func (c *Client) Put(key, value string) error {
 
 func (c *Client) tryPut(key, value string) error {
 	args := &ClientPutArgs{Key: key, Value: value}
-	reply := &ClientPutReply{}
 
 	order := c.candidateOrder()
 	for _, addr := range order {
@@ -44,6 +43,7 @@ func (c *Client) tryPut(key, value string) error {
 			fmt.Printf("[client] dial %s failed: %v\n", addr, err)
 			continue
 		}
+		reply := &ClientPutReply{}
 		err = conn.Call("Raft.ClientPut", args, reply)
 		conn.Close()
 		if err != nil {
@@ -76,7 +76,6 @@ func (c *Client) Get(key string) (string, bool, error) {
 
 func (c *Client) tryGet(key string) (string, bool, error) {
 	args := &ClientGetArgs{Key: key}
-	reply := &ClientGetReply{}
 
 	order := c.candidateOrder()
 	for _, addr := range order {
@@ -84,6 +83,7 @@ func (c *Client) tryGet(key string) (string, bool, error) {
 		if err != nil {
 			continue
 		}
+		reply := &ClientGetReply{}
 		err = conn.Call("Raft.ClientGet", args, reply)
 		conn.Close()
 		if err != nil {
