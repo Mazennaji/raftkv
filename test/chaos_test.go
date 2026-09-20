@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"net/rpc"
 	"os"
 	"os/exec"
 	"testing"
@@ -133,4 +134,45 @@ func TestMinorityCannotServeWrites(t *testing.T) {
 
 func findLeaderIndex(t *testing.T, c *client.Client) int {
 	return 1
+}
+
+func setNetworkEnabled(address string, enabled bool) error {
+	client, err := rpc.Dial("tcp", address)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	return client.Call("Raft.SetNetworkEnabled", &raft.SetNetworkArgs{Enabled: enabled}, &raft.SetNetworkReply{})
+}
+
+func TestNetworkPartitionIsolatesMinority(t *testing.T) {
+	tc := startCluster(t, 3)
+	defer tc.shutdown()
+
+	c := client.New(addresses())
+
+	if err := c.Put("before_partition", "value1"); err != nil {
+		t.Fatalf("initial put failed: %v", err)
+	}
+
+	if err := setNetworkEnabled("127.0.0.1:8003", false); err != nil {
+		t.Fatalf("failed to partition node 3: %v", err)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	if err := c.Put("during_partition", "value2"); err != nil {
+		t.Fatalf("majority side should still accept writes: %v", err)
+	}
+
+	if err := setNetworkEnabled("127.0.0.1:8003", true); err != nil {
+		t.Fatalf("failed to heal partition: %v", err)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	val, found, err := c.Get("during_partition")
+	if err != nil || !found || val != "value2" {
+		t.Fatalf("write made during partition was lost: val=%s found=%v err=%v", val, found, err)
+	}
 }
