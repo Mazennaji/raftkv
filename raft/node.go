@@ -55,6 +55,8 @@ type Node struct {
 
 	onApply func(LogEntry)
 	reader  Reader
+
+	networkEnabled bool
 }
 
 func NewNode(id uint64, peers []NodeConfig, wal *WAL) *Node {
@@ -63,13 +65,14 @@ func NewNode(id uint64, peers []NodeConfig, wal *WAL) *Node {
 		nextIndex[p.ID] = 1
 	}
 	return &Node{
-		id:          id,
-		peers:       peers,
-		state:       Follower,
-		currentTerm: 0,
-		votedFor:    0,
-		wal:         wal,
-		nextIndex:   nextIndex,
+		id:             id,
+		peers:          peers,
+		state:          Follower,
+		currentTerm:    0,
+		votedFor:       0,
+		wal:            wal,
+		nextIndex:      nextIndex,
+		networkEnabled: true,
 	}
 }
 
@@ -85,6 +88,18 @@ func (n *Node) SetReader(r Reader) {
 	n.reader = r
 }
 
+func (n *Node) SetNetworkEnabled(enabled bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.networkEnabled = enabled
+}
+
+func (n *Node) isNetworkEnabled() bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.networkEnabled
+}
+
 func (n *Node) State() State {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -98,6 +113,10 @@ func (n *Node) Term() uint64 {
 }
 
 func (n *Node) HandleRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
+	if !n.isNetworkEnabled() {
+		return errors.New("simulated network partition: node unreachable")
+	}
+
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -129,6 +148,10 @@ func (n *Node) HandleRequestVote(args *RequestVoteArgs, reply *RequestVoteReply)
 }
 
 func (n *Node) HandleAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) error {
+	if !n.isNetworkEnabled() {
+		return errors.New("simulated network partition: node unreachable")
+	}
+
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -288,7 +311,7 @@ func (n *Node) replicateTo(peer NodeConfig, term uint64) bool {
 			Entries:      entries,
 		}
 
-		reply, err := callAppendEntries(peer.Address, args)
+		reply, err := n.doAppendEntries(peer.Address, args)
 		if err != nil {
 			return false
 		}
@@ -314,6 +337,20 @@ func (n *Node) replicateTo(peer NodeConfig, term uint64) bool {
 			return false
 		}
 	}
+}
+
+func (n *Node) doRequestVote(address string, args *RequestVoteArgs) (*RequestVoteReply, error) {
+	if !n.isNetworkEnabled() {
+		return nil, errors.New("simulated network partition: cannot reach peers")
+	}
+	return callRequestVote(address, args)
+}
+
+func (n *Node) doAppendEntries(address string, args *AppendEntriesArgs) (*AppendEntriesReply, error) {
+	if !n.isNetworkEnabled() {
+		return nil, errors.New("simulated network partition: cannot reach peers")
+	}
+	return callAppendEntries(address, args)
 }
 
 func (n *Node) nextIndexFor(peerID uint64) uint64 {
