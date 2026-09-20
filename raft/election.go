@@ -62,7 +62,7 @@ func (n *Node) startElection() {
 				LastLogIndex: lastLogIndex,
 				LastLogTerm:  lastLogTerm,
 			}
-			reply, err := callRequestVote(address, args)
+			reply, err := n.doRequestVote(address, args)
 			if err != nil {
 				voteCh <- false
 				return
@@ -115,7 +115,7 @@ func (n *Node) leaderLoop() {
 					Term:     term,
 					LeaderID: n.id,
 				}
-				reply, err := callAppendEntries(address, args)
+				reply, err := n.doAppendEntries(address, args)
 				if err != nil {
 					return
 				}
