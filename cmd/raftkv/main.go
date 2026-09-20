@@ -3,49 +3,45 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
-	"github.com/Mazennaji/raftkv/kv"
+	"github.com/Mazennaji/raftkv/raft"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("usage: raftkv put <key> <value> | raftkv get <key>")
+	if len(os.Args) != 2 {
+		fmt.Println("usage: raftkv <node-id>")
 		os.Exit(1)
 	}
 
-	store, err := kv.Open("raftkv.wal")
+	id, err := strconv.ParseUint(os.Args[1], 10, 64)
 	if err != nil {
 		panic(err)
 	}
-	defer store.Close()
 
-	switch os.Args[1] {
-	case "put":
-		if len(os.Args) != 4 {
-			fmt.Println("usage: raftkv put <key> <value>")
-			os.Exit(1)
-		}
-		key, value := os.Args[2], os.Args[3]
-		if err := store.Put(key, value); err != nil {
-			panic(err)
-		}
-		fmt.Printf("put %s = %s\n", key, value)
+	cfg, err := raft.LoadConfig("config/cluster.yaml")
+	if err != nil {
+		panic(err)
+	}
 
-	case "get":
-		if len(os.Args) != 3 {
-			fmt.Println("usage: raftkv get <key>")
-			os.Exit(1)
+	var self raft.NodeConfig
+	for _, node := range cfg.Nodes {
+		if node.ID == id {
+			self = node
 		}
-		key := os.Args[2]
-		val, ok := store.Get(key)
-		if !ok {
-			fmt.Printf("%s not found\n", key)
-			os.Exit(1)
-		}
-		fmt.Printf("%s = %s\n", key, val)
+	}
 
-	default:
-		fmt.Println("unknown command:", os.Args[1])
-		os.Exit(1)
+	n := raft.NewNode(id, cfg.Nodes, nil)
+	if err := raft.Serve(n, self.Address); err != nil {
+		panic(err)
+	}
+	n.Run()
+
+	fmt.Printf("node %d listening on %s\n", id, self.Address)
+
+	for {
+		time.Sleep(1 * time.Second)
+		fmt.Printf("node %d state: %s term: %d\n", id, n.State(), n.Term())
 	}
 }
