@@ -369,11 +369,15 @@ func (n *Node) setNextIndex(peerID uint64, idx uint64) {
 	n.nextIndex[peerID] = idx
 }
 
-func (n *Node) resetNextIndex() {
-	n.mu.Lock()
-	defer n.mu.Unlock()
+func (n *Node) resetNextIndexLocked() {
 	next := uint64(len(n.log)) + 1
 	for _, p := range n.peers {
 		n.nextIndex[p.ID] = next
 	}
+}
+
+func (n *Node) resetNextIndex() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.resetNextIndexLocked()
 }
