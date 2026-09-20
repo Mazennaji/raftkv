@@ -41,6 +41,7 @@ func main() {
 	n := raft.NewNode(id, cfg.Nodes, wal)
 	store := kv.NewStore(n)
 	n.OnApply(store.Apply)
+	n.SetReader(store)
 
 	if err := raft.Serve(n, self.Address); err != nil {
 		panic(err)
@@ -55,15 +56,6 @@ func main() {
 			fmt.Printf("node %d state: %s term: %d\n", id, n.State(), n.Term())
 		}
 	}()
-
-	time.Sleep(2 * time.Second)
-	if n.State() == raft.Leader {
-		if err := store.Put("foo", "bar"); err != nil {
-			fmt.Println("put failed:", err)
-		} else {
-			fmt.Println("put foo=bar succeeded")
-		}
-	}
 
 	select {}
 }
