@@ -1,6 +1,9 @@
 package raft
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type State int
 
@@ -9,6 +12,22 @@ const (
 	Candidate
 	Leader
 )
+
+type Node struct {
+	mu sync.Mutex
+
+	id    uint64
+	peers []NodeConfig
+	state State
+
+	currentTerm uint64
+	votedFor    uint64
+
+	lastHeartbeat time.Time
+
+	wal *WAL
+	log []LogEntry
+}
 
 func (s State) String() string {
 	switch s {
@@ -103,6 +122,7 @@ func (n *Node) HandleAppendEntries(args *AppendEntriesArgs, reply *AppendEntries
 	n.currentTerm = args.Term
 	n.state = Follower
 	n.votedFor = 0
+	n.lastHeartbeat = time.Now()
 
 	reply.Term = n.currentTerm
 	reply.Success = true
