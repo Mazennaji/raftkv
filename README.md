@@ -1,3 +1,7 @@
+<div align="center">
+
+<img src="assets/logo.png" width="140" alt="raftkv logo" />
+
 # raftkv
 
 ![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
@@ -7,6 +11,8 @@
 ![Build](https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge&logo=githubactions&logoColor=white)
 
 > A distributed key-value store built from scratch in Go, implementing the Raft consensus algorithm for leader election, log replication, and crash recovery — with chaos tests for network partitions and node failures.
+
+</div>
 
 ---
 
@@ -18,6 +24,8 @@ The project is deliberately staged so that correctness is proven incrementally �
 
 ---
 
+<div align="center">
+
 ## Tech Stack
 
 ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)
@@ -25,6 +33,8 @@ The project is deliberately staged so that correctness is proven incrementally �
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![JSON](https://img.shields.io/badge/JSON-000000?style=flat-square&logo=json&logoColor=white)
 ![Git](https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white)
+
+</div>
 
 ---
 
@@ -49,6 +59,8 @@ raftkv/
 
 ---
 
+<div align="center">
+
 ## Core Guarantees
 
 | Guarantee | How it's achieved |
@@ -58,15 +70,16 @@ raftkv/
 | No split-brain | A partitioned minority cannot elect a leader or accept writes |
 | Consistent reads | Reads are served through the Raft-elected leader |
 
+</div>
+
 ---
 
 ## Roadmap
 
 - [x] **Milestone 1** — Single-node store with WAL-backed durability and crash recovery
-- [ ] **Milestone 2** — Multi-node cluster with leader election
-- [ ] **Milestone 3** — Log replication across followers
-- [ ] **Milestone 4** — Chaos testing: killed nodes, partitioned networks, split-brain prevention
-- [ ] **Milestone 5** — Log compaction via snapshots, client SDK, optional SQL layer
+- [x] **Milestone 2** — Multi-node cluster with leader election, log replication, and crash/chaos testing
+- [ ] **Milestone 3** — Network partition simulation and stale-leader-read protection
+- [ ] **Milestone 4** — Log compaction via snapshots, client SDK polish, optional SQL layer
 
 ---
 
@@ -88,6 +101,10 @@ Distributed consensus is one of the few problems in systems engineering where "l
 
 ---
 
+<div align="center">
+
 ## License
 
 MIT
+
+</div>
