@@ -32,6 +32,10 @@ func (s State) String() string {
 	}
 }
 
+type Reader interface {
+	Get(key string) (string, bool)
+}
+
 type Node struct {
 	mu sync.Mutex
 
@@ -50,6 +54,7 @@ type Node struct {
 	nextIndex map[uint64]uint64
 
 	onApply func(LogEntry)
+	reader  Reader
 }
 
 func NewNode(id uint64, peers []NodeConfig, wal *WAL) *Node {
@@ -72,6 +77,12 @@ func (n *Node) OnApply(fn func(LogEntry)) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.onApply = fn
+}
+
+func (n *Node) SetReader(r Reader) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.reader = r
 }
 
 func (n *Node) State() State {
