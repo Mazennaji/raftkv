@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/rpc"
+	"time"
 )
 
 var ErrAllNodesUnreachable = errors.New("no reachable node found a leader")
@@ -20,6 +21,19 @@ func New(addresses []string) *Client {
 }
 
 func (c *Client) Put(key, value string) error {
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		if err := c.tryPut(key, value); err != nil {
+			lastErr = err
+			time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
+			continue
+		}
+		return nil
+	}
+	return lastErr
+}
+
+func (c *Client) tryPut(key, value string) error {
 	args := &ClientPutArgs{Key: key, Value: value}
 	reply := &ClientPutReply{}
 
@@ -48,6 +62,19 @@ func (c *Client) Put(key, value string) error {
 }
 
 func (c *Client) Get(key string) (string, bool, error) {
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		val, found, err := c.tryGet(key)
+		if err == nil {
+			return val, found, nil
+		}
+		lastErr = err
+		time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
+	}
+	return "", false, lastErr
+}
+
+func (c *Client) tryGet(key string) (string, bool, error) {
 	args := &ClientGetArgs{Key: key}
 	reply := &ClientGetReply{}
 
