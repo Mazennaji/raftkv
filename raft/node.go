@@ -13,22 +13,6 @@ const (
 	Leader
 )
 
-type Node struct {
-	mu sync.Mutex
-
-	id    uint64
-	peers []NodeConfig
-	state State
-
-	currentTerm uint64
-	votedFor    uint64
-
-	lastHeartbeat time.Time
-
-	wal *WAL
-	log []LogEntry
-}
-
 func (s State) String() string {
 	switch s {
 	case Follower:
@@ -51,6 +35,8 @@ type Node struct {
 
 	currentTerm uint64
 	votedFor    uint64
+
+	lastHeartbeat time.Time
 
 	wal *WAL
 	log []LogEntry
