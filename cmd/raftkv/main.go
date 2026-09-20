@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("usage: raftkv <node-id>")
+	if len(os.Args) < 2 {
+		fmt.Println("usage: raftkv <node-id> [wal-path]")
 		os.Exit(1)
 	}
 
@@ -33,7 +33,11 @@ func main() {
 		}
 	}
 
-	wal, err := raft.NewWAL(fmt.Sprintf("node%d.wal", id))
+	walPath := fmt.Sprintf("node%d.wal", id)
+	if len(os.Args) == 3 {
+		walPath = os.Args[2]
+	}
+	wal, err := raft.NewWAL(walPath)
 	if err != nil {
 		panic(err)
 	}
