@@ -50,19 +50,18 @@ type ClientGetReply struct {
 	NotLeader bool
 }
 
-type RPCHandler struct {
-	node *Node
-}
-
+// SetNetworkArgs/SetNetworkReply and RPCHandler.SetNetworkEnabled below are
+// test-only: not part of the Raft protocol. They exist purely so chaos
+// tests can simulate a network partition by remotely toggling whether a
+// node will send or accept any Raft traffic.
 type SetNetworkArgs struct {
 	Enabled bool
 }
 
 type SetNetworkReply struct{}
 
-func (h *RPCHandler) SetNetworkEnabled(args *SetNetworkArgs, reply *SetNetworkReply) error {
-	h.node.SetNetworkEnabled(args.Enabled)
-	return nil
+type RPCHandler struct {
+	node *Node
 }
 
 func (h *RPCHandler) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
@@ -94,6 +93,12 @@ func (h *RPCHandler) ClientGet(args *ClientGetArgs, reply *ClientGetReply) error
 	value, found := h.node.reader.Get(args.Key)
 	reply.Value = value
 	reply.Found = found
+	return nil
+}
+
+// SetNetworkEnabled is test-only: not part of Raft.
+func (h *RPCHandler) SetNetworkEnabled(args *SetNetworkArgs, reply *SetNetworkReply) error {
+	h.node.SetNetworkEnabled(args.Enabled)
 	return nil
 }
 
