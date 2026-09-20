@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Mazennaji/raftkv/kv"
 	"github.com/Mazennaji/raftkv/raft"
 )
 
@@ -32,7 +33,15 @@ func main() {
 		}
 	}
 
-	n := raft.NewNode(id, cfg.Nodes, nil)
+	wal, err := raft.NewWAL(fmt.Sprintf("node%d.wal", id))
+	if err != nil {
+		panic(err)
+	}
+
+	n := raft.NewNode(id, cfg.Nodes, wal)
+	store := kv.NewStore(n)
+	n.OnApply(store.Apply)
+
 	if err := raft.Serve(n, self.Address); err != nil {
 		panic(err)
 	}
@@ -40,8 +49,21 @@ func main() {
 
 	fmt.Printf("node %d listening on %s\n", id, self.Address)
 
-	for {
-		time.Sleep(1 * time.Second)
-		fmt.Printf("node %d state: %s term: %d\n", id, n.State(), n.Term())
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			fmt.Printf("node %d state: %s term: %d\n", id, n.State(), n.Term())
+		}
+	}()
+
+	time.Sleep(2 * time.Second)
+	if n.State() == raft.Leader {
+		if err := store.Put("foo", "bar"); err != nil {
+			fmt.Println("put failed:", err)
+		} else {
+			fmt.Println("put foo=bar succeeded")
+		}
 	}
+
+	select {}
 }
