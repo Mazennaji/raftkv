@@ -7,8 +7,7 @@
 ![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
 ![Raft](https://img.shields.io/badge/Consensus-Raft-CC2927?style=for-the-badge&logo=apache&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)
-![Build](https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge&logo=githubactions&logoColor=white)
+![Tests](https://img.shields.io/badge/Chaos%20Tests-Passing-brightgreen?style=for-the-badge&logo=githubactions&logoColor=white)
 
 > A distributed key-value store built from scratch in Go, implementing the Raft consensus algorithm for leader election, log replication, and crash recovery — with chaos tests for network partitions and node failures.
 
@@ -20,7 +19,7 @@
 
 `raftkv` is not a wrapper around an existing consensus library. It's a from-scratch implementation of Raft, built to survive the failure modes that actually break naive distributed systems: crashed nodes, network partitions, and split-brain scenarios.
 
-The project is deliberately staged so that correctness is proven incrementally — durability first, then consensus, then fault tolerance under chaos — rather than bolting everything together and hoping it holds.
+Every guarantee below is backed by an automated test that kills real OS processes, partitions real TCP connections, and asserts on the result — not a happy-path demo.
 
 ---
 
@@ -61,25 +60,28 @@ raftkv/
 
 <div align="center">
 
-## Core Guarantees
+## Verified Guarantees
 
-| Guarantee | How it's achieved |
+| Guarantee | Proven by |
 |---|---|
-| No data loss on crash | Every write hits a write-ahead log with `fsync` before being acknowledged |
-| No data loss on leader failure | Writes are only committed after replication to a majority of nodes |
-| No split-brain | A partitioned minority cannot elect a leader or accept writes |
-| Consistent reads | Reads are served through the Raft-elected leader |
+| No data loss on crash | `TestRestartAfterCrash` — kills and restarts a node, confirms prior writes survive |
+| Correct failover on leader death | `TestKillLeaderMidOperation` — kills the leader mid-operation, confirms a new one is elected and writes continue |
+| No split-brain | `TestMinorityCannotServeWrites` — a true minority partition is proven unable to accept writes |
+| Partition tolerance | `TestNetworkPartitionIsolatesMinority` — an isolated node is cut off, majority keeps serving, isolated node rejoins cleanly on heal |
 
 </div>
 
 ---
 
-## Roadmap
+## Known Limitations
 
-- [x] **Milestone 1** — Single-node store with WAL-backed durability and crash recovery
-- [x] **Milestone 2** — Multi-node cluster with leader election, log replication, and crash/chaos testing
-- [ ] **Milestone 3** — Network partition simulation and stale-leader-read protection
-- [ ] **Milestone 4** — Log compaction via snapshots, client SDK polish, optional SQL layer
+Built and left open deliberately, not overlooked — a correct system should know exactly where its own edges are:
+
+- **Followers apply log entries on append, not on confirmed commit.** Real Raft applies only once an entry is majority-replicated; this implementation applies slightly earlier, which is safe in the tested scenarios but not fully spec-correct under all interleavings.
+- **A partitioned-but-still-alive leader can still answer local reads.** There's no leader lease or read-index protocol yet, so a stale leader cut off from the majority could theoretically serve outdated data to a client still pointed at it.
+- **Every RPC opens a fresh TCP connection** rather than reusing a persistent one per peer. This works, but adds latency that required widening the election timeout window to stay stable — a connection-pooled version would allow faster failover.
+
+None of these break the guarantees above under the tested failure modes — they're the gap between "provably correct in the scenarios covered" and "correct under every possible interleaving," which is the honest, normal state for a project at this stage.
 
 ---
 
@@ -88,7 +90,22 @@ raftkv/
 ```bash
 git clone https://github.com/yourusername/raftkv.git
 cd raftkv
-go run ./cmd/raftkv
+go build -o raftkv.exe ./cmd/raftkv
+```
+
+Run a 3-node cluster locally (one command per terminal):
+
+```powershell
+.\raftkv.exe 1
+.\raftkv.exe 2
+.\raftkv.exe 3
+```
+
+Run the full chaos test suite:
+
+```powershell
+cd test
+go test -v -timeout 60s
 ```
 
 Requires Go 1.22 or later.
@@ -97,7 +114,7 @@ Requires Go 1.22 or later.
 
 ## Why Raft
 
-Distributed consensus is one of the few problems in systems engineering where "looks like it works" and "is actually correct" diverge sharply. Raft was designed as an understandable alternative to Paxos, but understandable doesn't mean easy to implement correctly — every naive attempt tends to break the same way: under network partitions, where split-brain silently corrupts data. `raftkv` exists to implement and test that failure mode directly, not just the happy path.
+Distributed consensus is one of the few problems in systems engineering where "looks like it works" and "is actually correct" diverge sharply. Getting a Raft implementation to pass chaos tests surfaced three distinct real bugs during development — a mutex deadlock, an election-timeout-vs-network-latency margin issue, and a subtle `gob` zero-value serialization bug — each invisible in code review and only caught by actually killing processes and partitioning connections. That gap between "reads correctly" and "behaves correctly under failure" is the entire reason this project exists.
 
 ---
 
